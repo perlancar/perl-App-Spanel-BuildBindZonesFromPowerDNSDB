@@ -1,0 +1,8 @@
+0.002   2019-08-29  Released-By: PERLANCAR; Urgency: medium
+
+	- Allow passing dbh instead of db_dsn/db_user/db_password.
+
+
+0.001   2019-08-19  Released-By: PERLANCAR
+
+        - First release.
