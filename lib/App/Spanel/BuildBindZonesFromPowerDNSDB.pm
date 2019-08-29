@@ -16,6 +16,7 @@ my %args_common = (
 );
 delete $args_common{domain};
 delete $args_common{dbh};
+delete $args_common{master_host};
 
 our %SPEC;
 
@@ -44,6 +45,19 @@ _
             'x.name.is_plural' => 1,
             'x.name.singular' => 'include_domain',
             schema => ['array*', of=>'net::hostname*'],
+            tags => ['category:filtering'],
+        },
+        include_servers => {
+            'x.name.is_plural' => 1,
+            'x.name.singular' => 'include_server',
+            schema => ['array*', of=>'net::hostname*'],
+            tags => ['category:filtering'],
+        },
+        exclude_servers => {
+            'x.name.is_plural' => 1,
+            'x.name.singular' => 'exclude_server',
+            schema => ['array*', of=>'net::hostname*'],
+            tags => ['category:filtering'],
         },
     },
     args_rels => {
@@ -64,7 +78,19 @@ sub build_bind_zones {
             join(",", ("?") x @{$args{include_domains}}).")";
         push @binds , @{$args{include_domains}};
     }
-    $sql_sel_domain .= " WHERE ".join(" AND ", @wheres);
+    if ($args{include_servers}) {
+        for my $server (@{ $args{include_servers} }) {
+            push @wheres, "account LIKE ?";
+            push @binds , "s${server};%";
+        }
+    }
+    if ($args{exclude_servers}) {
+        for my $server (@{ $args{exclude_servers} }) {
+            push @wheres, "account NOT LIKE ?";
+            push @binds , "s${server};%";
+        }
+    }
+    $sql_sel_domain .= " WHERE ".join(" AND ", @wheres) if @wheres;
     $sql_sel_domain .= " ORDER BY name";
 
     # collect all the domains first
@@ -100,13 +126,13 @@ sub build_bind_zones {
         my ($server, $priority) = ($1 // "UNKNOWN", $2 // 0);
 
         my $bind_zone;
-        {
+        eval {
             $bind_zone = gen_bind_zone_from_powerdns_db(
                 dbh => $dbh,
                 domain_id => $record->{id},
                 master_host => $record->{name},
             );
-        }
+        };
         if ($@) {
             log_warn "Domain '$record->{name}' (ID $record->{id}): Cannot generate BIND zone: $@, skipping domain";
             next;
