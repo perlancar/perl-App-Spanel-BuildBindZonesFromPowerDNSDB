@@ -66,26 +66,28 @@ _
 sub build_bind_zones {
     my %args = @_;
 
+    my $overwrite = delete $args{overwrite};
+
     require DBIx::Connect::Any;
     my $dbh = DBIx::Connect::Any->connect(
-        $args{db_dsn}, $args{db_user}, $args{db_password}, {RaiseError=>1});
+        delete $args{db_dsn}, delete $args{db_user}, delete $args{db_password}, {RaiseError=>1});
 
     my $sql_sel_domain = "SELECT id,name,account FROM domains";
     my @wheres;
     my @binds;
-    if ($args{include_domains}) {
+    if (my $include_domains = delete $args{include_domains}) {
         push @wheres, "name IN (".
-            join(",", ("?") x @{$args{include_domains}}).")";
-        push @binds , @{$args{include_domains}};
+            join(",", ("?") x @$include_domains).")";
+        push @binds , @$include_domains;
     }
-    if ($args{include_servers}) {
-        for my $server (@{ $args{include_servers} }) {
+    if (my $include_servers = delete $args{include_servers}) {
+        for my $server (@$include_servers) {
             push @wheres, "account LIKE ?";
             push @binds , "s${server};%";
         }
     }
-    if ($args{exclude_servers}) {
-        for my $server (@{ $args{exclude_servers} }) {
+    if (my $exclude_servers = delete $args{exclude_servers}) {
+        for my $server (@$exclude_servers) {
             push @wheres, "account NOT LIKE ?";
             push @binds , "s${server};%";
         }
@@ -131,6 +133,7 @@ sub build_bind_zones {
                 dbh => $dbh,
                 domain_id => $record->{id},
                 master_host => $record->{name},
+                %args,
             );
         };
         if ($@) {
@@ -147,7 +150,7 @@ sub build_bind_zones {
         }
         my $output_file = "$output_dir/db.$record->{name}";
         if (-f $output_file) {
-            unless ($args{overwrite}) {
+            unless ($overwrite) {
                 log_info "Domain '$record->{name}' (ID $record->{id}): Output file $output_file already exists (and we're not overwriting), skipping domain";
                 next;
             }
